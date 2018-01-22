@@ -20,31 +20,35 @@ function generate(account, color) {
   d3.json("https://www.instagram.com/" + account + "/?__a=1", function(error, userjson) {
     if (error) { return console.log(error); }
 
-    var rgb = Vibrant.Util.hexToRgb(color);
-    var hue = Vibrant.Util.rgbToHsl(rgb[0], rgb[1], rgb[2])[0];
-
-    d3.json("https://api.instagram.com/v1/users/" + userjson.user.id + "/media/recent?access_token=" + access_token, function(error, photos) {
+    var count = 0;
+    var times = 0;
+    var callback = function(error, photos) {
       for (var i = 0; i < photos.data.length; i++) {
         var url = photos.data[i].images.thumbnail.url;
 
-        var v = new Vibrant(url);
-        (function(url) {
-          v.getPalette(function(err, palette) {
-            for(var p in palette) {
-              var h = palette[p].getHsl()[0];
-              if (p !== "Vibrant" && h > hue - error_margin && h < hue + error_margin) {
-                var div = document.createElement("div");
-                div.className = "tile";
-                div.id = "tile" + i;
-                div.style["background-image"] = "url(" + url + ")"
-                tiles.appendChild(div);
-                break;
-              }
+        (function(url) { RGBaster.colors(url, {
+          success: function(payload) {
+            var rgb = payload.dominant.match(/\d+/g);
+            var hex = Vibrant.Util.rgbToHex(+rgb[0], +rgb[1], +rgb[2]);
+            var diff = Vibrant.Util.hexDiff(color, hex); //CIE delta E 1994 diff: <= 10 is good
+
+            if (diff <= 15) {
+              var div = document.createElement("div");
+              div.className = "tile";
+              div.id = "tile" + i;
+              div.style["background-image"] = "url(" + url + ")"
+              tiles.appendChild(div);
+
+              count++;
             }
-          });
-        })(url);
+          }
+        }) })(url);
       }
-      // console.log(photos.pagination.next_url);
-    });
+      if (count < 15 && times < 10) {
+        d3.json(photos.pagination.next_url, callback);
+      }
+      times++;
+    };
+    d3.json("https://api.instagram.com/v1/users/" + userjson.user.id + "/media/recent?access_token=" + access_token, callback);
   });
 }
